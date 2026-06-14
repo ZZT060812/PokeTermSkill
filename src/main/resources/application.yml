@@ -1,0 +1,7 @@
+server:
+  port: 8765
+
+remote-terminal:
+  workspace-root: ${user.home}
+  # shell to spawn, auto-detect if blank
+  shell: ""
