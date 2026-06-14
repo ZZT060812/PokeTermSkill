@@ -50,6 +50,10 @@ public class App {
             System.out.println("  ╠══════════════════════════════════════════════════╣");
             System.out.println("  ║                                                ║");
             System.out.println("  ║   Network: " + padRight(netUrl, 37) + "║");
+            String publicUrl = System.getenv("TERM_PUBLIC_URL");
+            if (publicUrl != null && !publicUrl.isBlank()) {
+                System.out.println("  ║   Public:  " + padRight(publicUrl, 37) + "║");
+            }
             System.out.println("  ║   Token:   " + padRight(token, 37) + "║");
             System.out.println("  ║   Dir:     " + padRight(truncate(ws, 37), 37) + "║");
             String tmux = System.getenv("TERM_TMUX_SESSION");

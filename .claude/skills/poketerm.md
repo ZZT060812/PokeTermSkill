@@ -5,7 +5,7 @@ description: Sync your terminal to phone/tablet — monitor Claude Code sessions
 
 # PokeTerm Skill
 
-Starts the PokeTerm server so you can share your Claude Code session to any browser.
+Starts the PokeTerm server with a public tunnel so you can access your Claude Code session from anywhere.
 
 ## When to invoke
 
@@ -49,29 +49,47 @@ else
 fi
 ```
 
-### 4. Tell the user
+### 4. Start Cloudflare Tunnel
 
-The server prints a banner with Network URL and Token. Relay them:
+```bash
+# Kill any existing cloudflared tunnel for this port
+pkill -f "cloudflared.*localhost:8765" 2>/dev/null
+
+# Start tunnel in background, capture output
+cloudflared tunnel --url http://localhost:8765 > /tmp/poketerm-tunnel.log 2>&1 &
+
+# Wait for tunnel URL (up to 15s)
+for i in $(seq 1 15); do
+    TUNNEL_URL=$(grep -o 'https://[^ ]*\.trycloudflare\.com' /tmp/poketerm-tunnel.log | head -1)
+    [ -n "$TUNNEL_URL" ] && break
+    sleep 1
+done
+```
+
+### 5. Tell the user
+
+The server banner prints the local Network URL and Token.
+
+Relay everything together — local + public:
 
 ```
 PokeTerm ready — tmux session: <session>
 
-  Network: http://<ip>:8765
-  Token:   <token>
+  On same WiFi:
+    http://<local-ip>:8765
 
-Open on your phone/tablet. Same terminal, same Claude Code.
+  Anywhere:
+    <tunnel_url>
+
+  Token: <token>
+
+Open on your phone/tablet. Same Claude Code session on both devices.
 ```
 
-If the tmux session was just created, remind:
+If the tmux session was just created:
 
 ```
 Start Claude Code in tmux first:
   tmux attach -t work
   claude
-```
-
-### 5. Cross-network (only if asked)
-
-```bash
-cloudflared tunnel --url http://localhost:8765
 ```
