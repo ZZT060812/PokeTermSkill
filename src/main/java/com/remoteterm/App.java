@@ -41,7 +41,7 @@ public class App {
 
             System.out.println();
             System.out.println("  ╔══════════════════════════════════════════════════╗");
-            System.out.println("  ║        Remote AI Terminal  v1.0.0              ║");
+            System.out.println("  ║        PokeTerm  v1.0.0                        ║");
             System.out.println("  ╠══════════════════════════════════════════════════╣");
             System.out.println("  ║                                                ║");
             System.out.println("  ║   Local:   " + padRight(localUrl, 37) + "║");

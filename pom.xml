@@ -11,11 +11,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.remoteterm</groupId>
-    <artifactId>remote-ai-terminal</artifactId>
+    <groupId>com.poketerm</groupId>
+    <artifactId>PokeTerm</artifactId>
     <version>1.0.0</version>
-    <name>Remote AI Terminal</name>
-    <description>Remote terminal and file manager over WebSocket</description>
+    <name>PokeTerm</name>
+    <description>Sync your terminal to any browser. tmux-powered screen sharing, zero client install.</description>
 
     <properties>
         <java.version>21</java.version>

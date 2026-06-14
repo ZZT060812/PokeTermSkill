@@ -1,6 +1,6 @@
-# Remote AI Terminal
+# PokeTerm
 
-A remote terminal and file manager that mirrors your AI coding sessions to any device — phone, tablet, or laptop — through a web browser. Zero client installation. Uses tmux for true screen sharing across devices.
+Sync your terminal to any browser. Monitor AI coding sessions from phone, tablet, or laptop via WebSocket. tmux-powered screen sharing, zero client install.
 
 ## Why
 
@@ -72,7 +72,7 @@ Place `.claude/skills/remote-term.md` in your project's `.claude/skills/` direct
 
 ```bash
 mvn package -DskipTests
-java -jar target/remote-ai-terminal-1.0.0.jar
+java -jar target/PokeTerm-1.0.0.jar
 ```
 
 ## Remote Access
@@ -119,7 +119,7 @@ Each gives a public HTTPS URL. Open it anywhere.
 Or use CLI args:
 
 ```bash
-java -jar target/remote-ai-terminal-1.0.0.jar --token mytoken --workspace /path/to/project
+java -jar target/PokeTerm-1.0.0.jar --token mytoken --workspace /path/to/project
 ```
 
 ## Project Structure
