@@ -7,6 +7,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
+
 @SpringBootApplication
 public class App {
 
@@ -35,6 +39,7 @@ public class App {
             String port = System.getProperty("server.port", "8765");
             String token = authManager.getToken();
             String localUrl = "http://localhost:" + port;
+            String netUrl = "http://" + getLocalIp() + ":" + port;
             String ws = System.getProperty("remote-terminal.workspace-root",
                     System.getenv().getOrDefault("TERM_WORKSPACE",
                             System.getProperty("user.home")));
@@ -44,7 +49,7 @@ public class App {
             System.out.println("  ║        PokeTerm  v1.0.0                        ║");
             System.out.println("  ╠══════════════════════════════════════════════════╣");
             System.out.println("  ║                                                ║");
-            System.out.println("  ║   Local:   " + padRight(localUrl, 37) + "║");
+            System.out.println("  ║   Network: " + padRight(netUrl, 37) + "║");
             System.out.println("  ║   Token:   " + padRight(token, 37) + "║");
             System.out.println("  ║   Dir:     " + padRight(truncate(ws, 37), 37) + "║");
             String tmux = System.getenv("TERM_TMUX_SESSION");
@@ -57,6 +62,24 @@ public class App {
             System.out.println("  ╚══════════════════════════════════════════════════╝");
             System.out.println();
         };
+    }
+
+    private static String getLocalIp() {
+        try {
+            Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+            while (ifaces.hasMoreElements()) {
+                NetworkInterface iface = ifaces.nextElement();
+                if (iface.isLoopback() || !iface.isUp()) continue;
+                Enumeration<InetAddress> addrs = iface.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    InetAddress addr = addrs.nextElement();
+                    if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return "localhost";
     }
 
     private static String padRight(String s, int n) {
