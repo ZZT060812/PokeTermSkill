@@ -13,6 +13,11 @@ const Output = {
             <div id="cmd-bar">
                 <span class="cmd-prompt">$</span>
                 <input type="text" id="cmd-input" placeholder="Type command..." autocomplete="off" spellcheck="false">
+                <button class="key-btn" data-key="Up" title="Arrow Up">▲</button>
+                <button class="key-btn" data-key="Down" title="Arrow Down">▼</button>
+                <button class="key-btn" data-key="Enter" title="Enter (raw)">↵</button>
+                <button class="key-btn key-btn-esc" data-key="Escape" title="Escape">Esc</button>
+                <button class="key-btn key-btn-cc" data-key="C-c" title="Ctrl+C">⏹</button>
             </div>
         `;
 
@@ -25,15 +30,27 @@ const Output = {
             this.userScrolledUp = !atBottom;
         });
 
+        // Key buttons: send raw key presses for interactive TUIs
+        document.querySelectorAll('.key-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                App.send({ type: 'term.input', key: btn.dataset.key });
+                this.input.focus();
+            });
+        });
+
         this.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 const cmd = this.input.value;
                 if (cmd.trim()) {
+                    // Command mode: send as text
                     this._addLine('$ ' + cmd, 'cmd-echo');
                     App.send({ type: 'term.input', data: cmd });
                     this.history.push(cmd);
                     if (this.history.length > this.historyMax) this.history.shift();
                     this.historyIndex = -1;
+                } else {
+                    // Empty input + Enter = raw Enter key (for confirming TUI selections)
+                    App.send({ type: 'term.input', key: 'Enter' });
                 }
                 this.input.value = '';
                 this.userScrolledUp = false;
@@ -44,6 +61,13 @@ const Output = {
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 this._navHistory(1);
+            } else if (e.key === 'Escape') {
+                // Esc clears input, or if empty sends Esc key
+                if (this.input.value) {
+                    this.input.value = '';
+                } else {
+                    App.send({ type: 'term.input', key: 'Escape' });
+                }
             }
         });
 
@@ -68,7 +92,6 @@ const Output = {
             .replace(/\r/g, '');
         if (!text) return;
 
-        // Per-line filter for Claude Code UI noise
         const lines = text.split('\n');
         const filtered = [];
         for (const line of lines) {
@@ -77,7 +100,6 @@ const Output = {
             if (line.includes('⏵⏵')) continue;
             if (t === '? for shortcuts' || t === '? for shortcuts ') continue;
             if (t === '❯' || t === '❯ ') continue;
-            // Pure box-drawing separator line
             if (/^[\s─═━▄▀█▌▐]*$/.test(t)) continue;
             filtered.push(line);
         }

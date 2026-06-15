@@ -18,7 +18,6 @@ public class PtyManager {
 
     private static final Logger log = LoggerFactory.getLogger(PtyManager.class);
     private static final int RING_SIZE = 500;
-    private static final int POLL_INTERVAL_MS = 250;
 
     // ANSI escape sequences: CSI, OSC, charset select, cursor save/restore, window title
     private static final Pattern ANSI_PATTERN = Pattern.compile(
@@ -41,7 +40,13 @@ public class PtyManager {
     private volatile boolean alive;
     private Thread pollingThread;
     private String tmuxSession;
-    private String lastCapture = "";
+    // Smart debounce: first change sends immediately, subsequent redraws are batched
+    private String baseline = "";
+    private String latest = "";
+    private long lastChangeMs = 0;
+    private boolean inDebounce = false;
+    private static final long SETTLE_MS = 300;
+    private static final int POLL_INTERVAL_MS = 200;
 
     public void setListener(PtyOutputListener listener) {
         this.listener = listener;
@@ -61,11 +66,13 @@ public class PtyManager {
         alive = true;
     }
 
-    /** Tmux mode: poll capture-pane instead of attaching via PTY (avoids initial screen dump). */
+    /** Tmux mode: poll capture-pane with debounce — only flush after output stabilizes. */
     private void spawnWithTmuxPolling(String shell, Path workDir) throws IOException {
         log.info("Tmux polling mode: session '{}'", tmuxSession);
-        // Snap current pane content as baseline — will never be sent to clients
-        lastCapture = capturePane();
+        String init = capturePane();
+        baseline = init != null ? stripAnsi(init.getBytes()) : "";
+        latest = baseline;
+        lastChangeMs = System.currentTimeMillis();
 
         pollingThread = Thread.ofVirtual().name("tmux-poller").start(() -> {
             while (alive) {
@@ -74,12 +81,34 @@ public class PtyManager {
                     String current = capturePane();
                     if (current == null) continue;
                     String clean = stripAnsi(current.getBytes());
-                    String diff = diff(lastCapture, clean);
-                    if (!diff.isEmpty()) {
-                        PtyOutputListener l = listener;
-                        if (l != null) l.onOutput(diff);
+
+                    if (!clean.equals(latest)) {
+                        latest = clean;
+                        lastChangeMs = System.currentTimeMillis();
+                        if (!inDebounce) {
+                            // First change: send immediately (low latency)
+                            String diff = diff(baseline, latest);
+                            baseline = latest;
+                            if (!diff.isEmpty()) {
+                                PtyOutputListener l = listener;
+                                if (l != null) l.onOutput(diff);
+                            }
+                            inDebounce = true;
+                        }
                     }
-                    lastCapture = clean;
+
+                    // After settling: flush any accumulated redraw changes
+                    if (inDebounce && System.currentTimeMillis() - lastChangeMs >= SETTLE_MS) {
+                        if (!latest.equals(baseline)) {
+                            String diff = diff(baseline, latest);
+                            baseline = latest;
+                            if (!diff.isEmpty()) {
+                                PtyOutputListener l = listener;
+                                if (l != null) l.onOutput(diff);
+                            }
+                        }
+                        inDebounce = false;
+                    }
                 } catch (InterruptedException e) {
                     break;
                 } catch (Exception e) {
@@ -87,6 +116,18 @@ public class PtyManager {
                 }
             }
         });
+    }
+
+    /** Flush any pending debounced output immediately (called before sending a command). */
+    public synchronized void flushPending() {
+        if (!latest.equals(baseline)) {
+            String diff = diff(baseline, latest);
+            baseline = latest;
+            if (!diff.isEmpty()) {
+                PtyOutputListener l = listener;
+                if (l != null) l.onOutput(diff);
+            }
+        }
     }
 
     private String capturePane() {
@@ -168,8 +209,35 @@ public class PtyManager {
         pty.getOutputStream().flush();
     }
 
+    /** Send a raw key press (for interactive TUIs). */
+    public synchronized void sendKey(String key) throws IOException {
+        if (!alive) return;
+        flushPending();
+        if (tmuxSession != null) {
+            try {
+                new ProcessBuilder(findTmux(), "send-keys", "-t", tmuxSession, key)
+                        .start().waitFor();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        } else if (pty != null) {
+            // Map key names to escape sequences for direct PTY
+            switch (key) {
+                case "Up" -> pty.getOutputStream().write("\033[A".getBytes(StandardCharsets.UTF_8));
+                case "Down" -> pty.getOutputStream().write("\033[B".getBytes(StandardCharsets.UTF_8));
+                case "Enter" -> pty.getOutputStream().write("\n".getBytes(StandardCharsets.UTF_8));
+                case "Escape" -> pty.getOutputStream().write("\033".getBytes(StandardCharsets.UTF_8));
+                case "C-c" -> pty.getOutputStream().write("\003".getBytes(StandardCharsets.UTF_8));
+                default -> { /* unknown key */ }
+            }
+            pty.getOutputStream().flush();
+        }
+    }
+
     public synchronized void sendCommand(String cmd) throws IOException {
         if (!alive) return;
+        // Flush any pending debounced output before the command runs
+        flushPending();
         if (tmuxSession != null) {
             try {
                 new ProcessBuilder(findTmux(), "send-keys", "-l", "-t", tmuxSession, cmd)

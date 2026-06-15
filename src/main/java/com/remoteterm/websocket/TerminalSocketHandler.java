@@ -130,8 +130,22 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
     }
 
     private void handleTermInput(Map<String, Object> msg) {
+        if (!ptyManager.isAlive()) return;
+
+        // Raw key press (for interactive TUIs like Claude's session picker)
+        String key = (String) msg.get("key");
+        if (key != null && !key.isBlank()) {
+            try {
+                ptyManager.sendKey(key);
+            } catch (IOException e) {
+                log.error("Key send error", e);
+            }
+            return;
+        }
+
+        // Text command
         String cmd = (String) msg.get("data");
-        if (cmd != null && !cmd.isBlank() && ptyManager.isAlive()) {
+        if (cmd != null && !cmd.isBlank()) {
             try {
                 ptyManager.sendCommand(cmd);
             } catch (IOException e) {
