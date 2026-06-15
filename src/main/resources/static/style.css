@@ -1,136 +1,210 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-    --bg: #1e1e2e;
-    --bg2: #181825;
-    --surface: #313244;
-    --text: #cdd6f4;
-    --text2: #a6adc8;
-    --accent: #89b4fa;
-    --red: #f38ba8;
-    --green: #a6e3a1;
-    --yellow: #f9e2af;
-    --border: #45475a;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --surface: rgba(255,255,255,0.85);
+    --surface2: rgba(255,255,255,0.60);
+    --text: #1a2b3c;
+    --text2: #5a7a9a;
+    --green: #16a34a;
+    --red: #dc2626;
+    --yellow: #d97706;
+    --border: #c8d6e5;
+    --shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
+html, body {
+    height: 100%; width: 100%;
+    margin: 0; padding: 0;
+    overflow: hidden;
+}
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
+    background: linear-gradient(170deg, #b8e4f0 0%, #d4eaf7 30%, #e8f4fd 60%, #c5e3f6 100%);
     color: var(--text);
-    height: 100dvh;
-    overflow: hidden;
     -webkit-tap-highlight-color: transparent;
 }
 
 /* ---- Login ---- */
 #login-screen {
     display: flex; align-items: center; justify-content: center;
-    height: 100dvh;
+    height: 100%;
 }
 .login-box {
-    background: var(--bg2);
+    background: var(--surface);
+    backdrop-filter: blur(12px);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 32px;
-    width: 360px;
+    border-radius: 16px;
+    padding: 36px;
+    width: 380px;
     max-width: 90vw;
     text-align: center;
+    box-shadow: 0 4px 24px rgba(59,130,246,0.12);
 }
-.login-box h1 { font-size: 1.4rem; margin-bottom: 8px; }
-.login-box p { color: var(--text2); font-size: 0.9rem; margin-bottom: 20px; }
+.login-box h1 { font-size: 1.5rem; margin-bottom: 6px; color: var(--text); }
+.login-box p { color: var(--text2); font-size: 0.9rem; margin-bottom: 22px; }
 .login-box input {
-    width: 100%; padding: 10px 14px;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--text); font-size: 0.95rem;
+    width: 100%; padding: 11px 16px;
+    background: rgba(255,255,255,0.8); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 0.95rem;
     outline: none; text-align: center;
 }
-.login-box input:focus { border-color: var(--accent); }
+.login-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
 .login-box button {
-    width: 100%; margin-top: 12px; padding: 10px;
-    background: var(--accent); color: var(--bg);
-    border: none; border-radius: 8px; font-size: 0.95rem;
-    font-weight: 600; cursor: pointer;
+    width: 100%; margin-top: 14px; padding: 11px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 10px; font-size: 0.95rem;
+    font-weight: 600; cursor: pointer; transition: background 0.15s;
 }
-.login-box button:hover { opacity: 0.9; }
+.login-box button:hover { background: var(--accent-hover); }
 .error { color: var(--red); font-size: 0.85rem; margin-top: 10px; }
 .warning { color: var(--yellow); font-size: 0.8rem; }
 
+/* ---- App shell (CSS Grid) ---- */
+#app-screen {
+    display: grid;
+    grid-template-rows: 42px 1fr 38px;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
 /* ---- Toolbar ---- */
 #toolbar {
-    display: flex; align-items: center; gap: 12px;
-    height: 40px; padding: 0 12px;
-    background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 14px;
+    background: var(--surface);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
 }
 #toolbar button {
-    background: var(--surface); color: var(--text);
+    background: rgba(255,255,255,0.7); color: var(--text);
     border: 1px solid var(--border); border-radius: 6px;
-    padding: 4px 12px; font-size: 0.85rem; cursor: pointer;
+    padding: 4px 12px; font-size: 0.82rem; cursor: pointer;
+    transition: background 0.15s;
 }
-#toolbar button:hover { background: var(--border); }
-#connection-status { font-size: 0.8rem; flex: 1; }
+#toolbar button:hover { background: rgba(59,130,246,0.1); }
+#connection-status { font-size: 0.78rem; flex: 1; }
 .status-connected { color: var(--green); }
 .status-disconnected { color: var(--red); }
 .status-connecting { color: var(--yellow); }
 
-/* ---- Layout ---- */
+/* ---- Main area ---- */
 #main {
-    display: flex; height: calc(100dvh - 40px);
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    overflow: hidden;
+    min-height: 0;
 }
 
 /* ---- Sidebar ---- */
 #sidebar {
-    width: 260px; min-width: 200px;
-    background: var(--bg2); border-right: 1px solid var(--border);
+    background: var(--surface2);
+    backdrop-filter: blur(8px);
+    border-right: 1px solid var(--border);
     overflow-y: auto; overflow-x: hidden;
-    display: flex; flex-direction: column;
+    min-height: 0;
 }
-#file-tree { padding: 8px 0; }
+#file-tree { padding: 6px 0; }
 
 /* ---- File tree ---- */
 .tree-node { user-select: none; }
 .tree-row {
     display: flex; align-items: center; gap: 4px;
     padding: 3px 12px; cursor: pointer;
-    font-size: 0.85rem; white-space: nowrap;
+    font-size: 0.82rem; white-space: nowrap;
 }
-.tree-row:hover { background: var(--surface); }
-.tree-row.selected { background: var(--accent); color: var(--bg); }
-.tree-icon { width: 16px; text-align: center; font-size: 0.75rem; flex-shrink: 0; }
-.tree-arrow { width: 14px; text-align: center; font-size: 0.65rem; flex-shrink: 0; transition: transform 0.15s; }
+.tree-row:hover { background: rgba(59,130,246,0.08); }
+.tree-row.selected { background: var(--accent); color: #fff; }
+.tree-icon { width: 18px; text-align: center; font-size: 0.75rem; flex-shrink: 0; }
+.tree-arrow { width: 14px; text-align: center; font-size: 0.6rem; flex-shrink: 0; transition: transform 0.15s; }
 .tree-arrow.open { transform: rotate(90deg); }
 .tree-name { overflow: hidden; text-overflow: ellipsis; }
 .tree-children { display: none; }
 .tree-children.open { display: block; }
 
-/* ---- Terminal ---- */
-#terminal-container { flex: 1; padding: 4px; overflow: hidden; }
-#terminal { height: 100%; }
-.xterm { height: 100%; padding: 4px; }
-.xterm-viewport::-webkit-scrollbar { width: 6px; }
-.xterm-viewport::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+/* ---- Terminal container ---- */
+#terminal-container {
+    position: relative;
+    overflow: hidden;
+    min-height: 0; min-width: 0;
+}
+
+/* ---- Output panel (fills space above cmd bar) ---- */
+#output-panel {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 38px;
+    overflow-y: scroll; overflow-x: hidden;
+    padding: 10px 14px;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-all;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    background: var(--surface);
+    color: var(--text);
+}
+#output-panel::-webkit-scrollbar { width: 6px; }
+#output-panel::-webkit-scrollbar-thumb { background: #c8d6e5; border-radius: 3px; }
+#output-panel::-webkit-scrollbar-track { background: transparent; }
+
+.output-line { display: inline; }
+.cmd-echo { color: var(--text2); }
+
+/* ---- Command bar ---- */
+#cmd-bar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; gap: 0;
+    padding: 0 14px;
+    background: var(--surface2);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    height: 38px;
+}
+.cmd-prompt {
+    color: var(--green);
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    font-weight: 700;
+}
+#cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+}
+#cmd-input::placeholder { color: var(--text2); opacity: 0.6; }
 
 /* ---- Context menu ---- */
 .context-menu {
     position: fixed; z-index: 100;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 4px 0; min-width: 150px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 10px; padding: 4px 0; min-width: 150px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
 }
 .ctx-item {
     padding: 8px 16px; font-size: 0.85rem; cursor: pointer;
 }
-.ctx-item:hover { background: var(--accent); color: var(--bg); }
+.ctx-item:hover { background: rgba(59,130,246,0.1); }
 
 /* ---- Modal ---- */
 .modal {
     position: fixed; z-index: 200; inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.35);
     display: flex; align-items: center; justify-content: center;
 }
 .modal-box {
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 12px; width: 700px; max-width: 95vw;
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 14px; width: 700px; max-width: 95vw;
     max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
 }
 .modal-sm { width: 360px; }
 .modal-header {
@@ -144,7 +218,7 @@ body {
 }
 .modal-box textarea, .modal-box input[type="text"] {
     flex: 1; padding: 12px 16px;
-    background: var(--bg); color: var(--text);
+    background: #fafbfc; color: var(--text);
     border: none; outline: none; font-family: monospace;
     font-size: 0.85rem; resize: none; min-height: 200px;
 }
@@ -155,22 +229,25 @@ body {
 }
 .modal-footer button {
     padding: 6px 18px; background: var(--accent);
-    color: var(--bg); border: none; border-radius: 6px;
+    color: #fff; border: none; border-radius: 6px;
     font-weight: 600; cursor: pointer;
 }
 
 /* ---- Mobile ---- */
 @media (max-width: 768px) {
+    #main { grid-template-columns: 1fr; }
     #sidebar {
-        position: fixed; z-index: 50; left: 0; top: 40px;
-        width: 280px; height: calc(100dvh - 40px);
+        position: fixed; z-index: 50; left: 0; top: 42px;
+        width: 280px; height: calc(100vh - 42px - 38px);
         transform: translateX(-100%); transition: transform 0.2s;
-        box-shadow: 4px 0 16px rgba(0,0,0,0.4);
+        box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+        background: var(--surface);
     }
     #sidebar.open { transform: translateX(0); }
     #toolbar { padding: 0 8px; }
     #toggle-files { display: inline-block !important; }
-    .xterm { font-size: 12px !important; }
+    #output-panel { font-size: 12px; padding: 8px 10px; }
+    #cmd-input { font-size: 12px; }
 }
 
 @media (min-width: 769px) {

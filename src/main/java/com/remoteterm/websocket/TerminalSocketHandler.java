@@ -41,15 +41,14 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
     // ---- PtyOutputListener ----
 
     @Override
-    public void onOutput(String base64Data) {
-        broadcast(mapOf("type", MessageType.TERM_OUTPUT, "data", base64Data));
+    public void onOutput(String plainText) {
+        broadcast(mapOf("type", MessageType.TERM_OUTPUT, "data", plainText));
     }
 
     @Override
     public void onExit() {
         broadcast(mapOf("type", MessageType.TERM_OUTPUT, "data",
-                Base64.getEncoder().encodeToString(
-                        "\r\n[PTY process exited]\r\n".getBytes())));
+                "\n[PTY process exited]\n"));
     }
 
     // ---- WebSocket lifecycle ----
@@ -67,7 +66,6 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
             String type = (String) msg.get("type");
             if (type == null) return;
 
-            // Auth check
             boolean authed = Boolean.TRUE.equals(session.getAttributes().get("authed"));
             if (!authed && !MessageType.AUTH.equals(type)) {
                 send(session, mapOf("type", MessageType.AUTH, "ok", false,
@@ -77,9 +75,8 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
 
             switch (type) {
                 case MessageType.AUTH -> handleAuth(session, msg);
-                case MessageType.TERM_INIT -> handleTermInit(session, msg);
+                case MessageType.TERM_INIT -> handleTermInit(session);
                 case MessageType.TERM_INPUT -> handleTermInput(msg);
-                case MessageType.TERM_RESIZE -> handleTermResize(msg);
                 case MessageType.FS_LIST -> handleFsList(session, msg);
                 case MessageType.FS_READ -> handleFsRead(session, msg);
                 case MessageType.FS_WRITE -> handleFsWrite(session, msg);
@@ -117,54 +114,33 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
 
     // ---- Terminal ----
 
-    private void handleTermInit(WebSocketSession session, Map<String, Object> msg) {
-        int cols = intVal(msg, "cols", 80);
-        int rows = intVal(msg, "rows", 24);
-        boolean fresh = Boolean.TRUE.equals(msg.get("fresh"));
-
+    private void handleTermInit(WebSocketSession session) {
         if (!ptyManager.isAlive()) {
             try {
                 String shell = System.getenv().getOrDefault("SHELL", "/bin/zsh");
                 String workspace = resolveWorkspace();
-                ptyManager.spawn(shell, Path.of(workspace), cols, rows);
-                // New PTY, no replay needed (fresh is implicit)
+                ptyManager.spawn(shell, Path.of(workspace), 120, 40);
             } catch (IOException e) {
                 send(session, mapOf("type", "error", "message",
                         "Failed to spawn PTY: " + e.getMessage()));
                 return;
             }
-        } else {
-            ptyManager.resize(cols, rows);
         }
-
-        // Always replay ring buffer content if available (both reconnect and new device join)
-        if (ptyManager.isAlive()) {
-            byte[] replay = ptyManager.getReplayData();
-            if (replay.length > 0) {
-                String b64 = Base64.getEncoder().encodeToString(replay);
-                send(session, mapOf("type", MessageType.TERM_REPLAY, "data", b64));
-            }
-        }
+        send(session, mapOf("type", MessageType.TERM_INIT, "ok", true));
     }
 
     private void handleTermInput(Map<String, Object> msg) {
-        String data = (String) msg.get("data");
-        if (data != null && ptyManager.isAlive()) {
+        String cmd = (String) msg.get("data");
+        if (cmd != null && !cmd.isBlank() && ptyManager.isAlive()) {
             try {
-                ptyManager.write(Base64.getDecoder().decode(data));
+                ptyManager.sendCommand(cmd);
             } catch (IOException e) {
-                log.error("PTY write error", e);
+                log.error("Command send error", e);
             }
         }
     }
 
-    private void handleTermResize(Map<String, Object> msg) {
-        int cols = intVal(msg, "cols", 80);
-        int rows = intVal(msg, "rows", 24);
-        ptyManager.resize(cols, rows);
-    }
-
-    // ---- File operations ----
+    // ---- File operations (unchanged) ----
 
     private void handleFsList(WebSocketSession session, Map<String, Object> msg) {
         String path = strVal(msg, "path", ".");
@@ -230,12 +206,6 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
                 }
             }
         }
-    }
-
-    private static int intVal(Map<String, Object> m, String key, int def) {
-        Object v = m.get(key);
-        if (v instanceof Number n) return n.intValue();
-        return def;
     }
 
     private static String strVal(Map<String, Object> m, String key, String def) {

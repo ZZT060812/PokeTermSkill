@@ -112,7 +112,7 @@ Requirements: Java 21, Maven 3.9, tmux.
 
 ```bash
 git clone git@github.com:ZZT060812/PokeTerm.git
-cp PokeTerm/.claude/skills/poketerm.md your-project/.claude/skills/
+cp -r PokeTerm/.claude/skills/poketerm/ your-project/.claude/skills/
 ```
 
 Then in Claude Code:

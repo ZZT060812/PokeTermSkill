@@ -9,13 +9,29 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Pattern;
 
 public class PtyManager {
 
     private static final Logger log = LoggerFactory.getLogger(PtyManager.class);
     private static final int RING_SIZE = 500;
+    private static final int POLL_INTERVAL_MS = 250;
+
+    // ANSI escape sequences: CSI, OSC, charset select, cursor save/restore, window title
+    private static final Pattern ANSI_PATTERN = Pattern.compile(
+            "\\[[0-9;]*[a-zA-Z]" +
+            "|\\].*?(?:|\\\\)" +
+            "|[()][0-9AB]" +
+            "|\\[[?][0-9;]*[a-zA-Z]" +
+            "|\\]0;.*??" +
+            "|[78]" +       // DEC save/restore cursor
+            "|=" +          // application keypad
+            "|>" +          // normal keypad
+            "|"             // BEL
+    );
 
     private PtyProcess pty;
     private PtyOutputListener listener;
@@ -23,6 +39,9 @@ public class PtyManager {
     private int ringHead;
     private int ringCount;
     private volatile boolean alive;
+    private Thread pollingThread;
+    private String tmuxSession;
+    private String lastCapture = "";
 
     public void setListener(PtyOutputListener listener) {
         this.listener = listener;
@@ -31,28 +50,82 @@ public class PtyManager {
     public synchronized void spawn(String shell, Path workDir, int cols, int rows) throws IOException {
         if (alive) return;
 
+        tmuxSession = System.getenv("TERM_TMUX_SESSION");
+        if (tmuxSession != null && tmuxSession.isBlank()) tmuxSession = null;
+
+        if (tmuxSession != null) {
+            spawnWithTmuxPolling(shell, workDir);
+        } else {
+            spawnWithPty(shell, workDir, cols, rows);
+        }
+        alive = true;
+    }
+
+    /** Tmux mode: poll capture-pane instead of attaching via PTY (avoids initial screen dump). */
+    private void spawnWithTmuxPolling(String shell, Path workDir) throws IOException {
+        log.info("Tmux polling mode: session '{}'", tmuxSession);
+        // Snap current pane content as baseline — will never be sent to clients
+        lastCapture = capturePane();
+
+        pollingThread = Thread.ofVirtual().name("tmux-poller").start(() -> {
+            while (alive) {
+                try {
+                    Thread.sleep(POLL_INTERVAL_MS);
+                    String current = capturePane();
+                    if (current == null) continue;
+                    String clean = stripAnsi(current.getBytes());
+                    String diff = diff(lastCapture, clean);
+                    if (!diff.isEmpty()) {
+                        PtyOutputListener l = listener;
+                        if (l != null) l.onOutput(diff);
+                    }
+                    lastCapture = clean;
+                } catch (InterruptedException e) {
+                    break;
+                } catch (Exception e) {
+                    if (alive) log.debug("Poll error: {}", e.getMessage());
+                }
+            }
+        });
+    }
+
+    private String capturePane() {
+        try {
+            Process p = new ProcessBuilder(
+                    findTmux(), "capture-pane", "-p", "-t", tmuxSession, "-e")
+                    .redirectErrorStream(true)
+                    .start();
+            byte[] out = p.getInputStream().readAllBytes();
+            p.waitFor();
+            return new String(out, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.debug("capture-pane failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Diff: return suffix of current that is new relative to old. */
+    private static String diff(String old, String current) {
+        if (current.startsWith(old)) {
+            return current.substring(old.length());
+        }
+        // After screen clear or major change, try to find overlap
+        int overlapLen = Math.min(old.length(), current.length());
+        for (int i = overlapLen; i > 0; i--) {
+            if (old.endsWith(current.substring(0, i))) {
+                return current.substring(i);
+            }
+        }
+        return current;
+    }
+
+    /** Direct-shell mode: spawn PTY and read stream. */
+    private void spawnWithPty(String shell, Path workDir, int cols, int rows) throws IOException {
         Map<String, String> env = new HashMap<>(System.getenv());
         env.put("TERM", "xterm-256color");
 
-        String tmuxSession = System.getenv("TERM_TMUX_SESSION");
-        String[] cmd;
-        String cwd;
-
-        if (tmuxSession != null && !tmuxSession.isBlank()) {
-            // Attach to existing tmux session — shared terminal view
-            String tmuxBin = findTmux();
-            cmd = new String[]{tmuxBin, "attach", "-t", tmuxSession};
-            cwd = workDir.toString();
-            log.info("Tmux mode: attaching to session '{}'", tmuxSession);
-        } else {
-            // Spawn a new shell
-            cmd = new String[]{shell};
-            cwd = workDir.toString();
-        }
-
-        pty = PtyProcess.exec(cmd, env, cwd);
+        pty = PtyProcess.exec(new String[]{shell}, env, workDir.toString());
         pty.setWinSize(new WinSize(cols, rows));
-        alive = true;
 
         Thread.ofVirtual().name("pty-reader").start(() -> {
             try {
@@ -68,7 +141,8 @@ public class PtyManager {
                     }
                     PtyOutputListener l = listener;
                     if (l != null) {
-                        l.onOutput(Base64.getEncoder().encodeToString(chunk));
+                        String clean = stripAnsi(chunk);
+                        if (!clean.isEmpty()) l.onOutput(clean);
                     }
                 }
             } catch (IOException e) {
@@ -84,10 +158,31 @@ public class PtyManager {
     }
 
     public synchronized void write(byte[] data) throws IOException {
+        if (tmuxSession != null) {
+            String cmd = new String(data, StandardCharsets.UTF_8).stripTrailing();
+            if (!cmd.isEmpty()) sendCommand(cmd);
+            return;
+        }
         if (pty == null || !alive) return;
-        OutputStream out = pty.getOutputStream();
-        out.write(data);
-        out.flush();
+        pty.getOutputStream().write(data);
+        pty.getOutputStream().flush();
+    }
+
+    public synchronized void sendCommand(String cmd) throws IOException {
+        if (!alive) return;
+        if (tmuxSession != null) {
+            try {
+                new ProcessBuilder(findTmux(), "send-keys", "-l", "-t", tmuxSession, cmd)
+                        .start().waitFor();
+                new ProcessBuilder(findTmux(), "send-keys", "-t", tmuxSession, "Enter")
+                        .start().waitFor();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        } else if (pty != null) {
+            pty.getOutputStream().write((cmd + "\n").getBytes(StandardCharsets.UTF_8));
+            pty.getOutputStream().flush();
+        }
     }
 
     public synchronized void resize(int cols, int rows) {
@@ -115,9 +210,17 @@ public class PtyManager {
 
     public synchronized void destroy() {
         alive = false;
+        if (pollingThread != null) {
+            pollingThread.interrupt();
+        }
         if (pty != null) {
             pty.destroy();
         }
+    }
+
+    static String stripAnsi(byte[] data) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        return ANSI_PATTERN.matcher(text).replaceAll("");
     }
 
     private static String findTmux() {
@@ -130,6 +233,6 @@ public class PtyManager {
                 return path;
             }
         }
-        return "tmux"; // fallback to PATH
+        return "tmux";
     }
 }
