@@ -270,6 +270,16 @@ public class PtyManager {
         return out.toByteArray();
     }
 
+    /** Returns current pane content (ANSI stripped) for initial client state. */
+    public synchronized String getCurrentState() {
+        if (tmuxSession != null) {
+            String pane = capturePane();
+            return pane != null ? stripAnsi(pane.getBytes()) : "";
+        }
+        byte[] ring = getReplayData();
+        return ring.length > 0 ? stripAnsi(ring) : "";
+    }
+
     public boolean isAlive() {
         return alive;
     }

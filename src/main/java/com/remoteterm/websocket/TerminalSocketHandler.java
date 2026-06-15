@@ -115,7 +115,8 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
     // ---- Terminal ----
 
     private void handleTermInit(WebSocketSession session) {
-        if (!ptyManager.isAlive()) {
+        boolean wasDead = !ptyManager.isAlive();
+        if (wasDead) {
             try {
                 String shell = System.getenv().getOrDefault("SHELL", "/bin/zsh");
                 String workspace = resolveWorkspace();
@@ -126,6 +127,13 @@ public class TerminalSocketHandler extends TextWebSocketHandler implements PtyOu
                 return;
             }
         }
+
+        // Send current pane state so client sees the terminal immediately
+        String state = ptyManager.getCurrentState();
+        if (state != null && !state.isEmpty()) {
+            send(session, mapOf("type", MessageType.TERM_OUTPUT, "data", state));
+        }
+
         send(session, mapOf("type", MessageType.TERM_INIT, "ok", true));
     }
 

@@ -89,6 +89,7 @@ const Output = {
             }
         });
 
+        // Tap output panel to focus input (but NOT on init — avoids mobile keyboard popup)
         this.panel.addEventListener('click', () => {
             if (this.userScrolledUp) {
                 this.userScrolledUp = false;
@@ -98,7 +99,8 @@ const Output = {
             }
         });
 
-        this.input.focus();
+        // Clear any stray value
+        this.input.value = '';
     },
 
     // ---- Permission detection ----
